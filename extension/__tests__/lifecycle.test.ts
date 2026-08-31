@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDefaultConfig } from '../../shared/config';
-import { setModelEnabled, setOverride } from '../../shared/state';
+import { setDefault, setEnabled } from '../../shared/state';
 import { storeConnection, type SocketLike } from '../provider/continuation';
 
 const mocks = vi.hoisted(() => ({ config: undefined as ReturnType<typeof createDefaultConfig> | undefined }));
@@ -26,7 +26,7 @@ function harness(model = supported) {
 describe('extension lifecycle', () => {
   beforeEach(() => { mocks.config = createDefaultConfig(); });
   it('retains desired owned tools and preserves foreign tools across turns', async () => {
-    mocks.config = setOverride(setModelEnabled(createDefaultConfig(), 'openai/gpt-5.4', true), 'openai/gpt-5.4', 'webTools', true);
+    mocks.config = setDefault(setEnabled(createDefaultConfig(), true), 'webTools', true);
     const { handlers, ctx, active } = harness();
     await handlers.get('before_agent_start')!({ systemPrompt: 'Sero and project context' }, ctx as never);
     expect(active()).toEqual(['read', 'other_tool', 'openai_extender_web_search', 'openai_extender_read_page']);
@@ -52,7 +52,7 @@ describe('extension lifecycle', () => {
     expect(pi.registerProvider.mock.calls[0][1]).not.toHaveProperty('oauth');
   });
   it('activates the OAuth route while keeping request-hook mutation on API-key routes', async () => {
-    mocks.config = setOverride(setModelEnabled(createDefaultConfig(), 'openai-codex/gpt-5.4', true), 'openai-codex/gpt-5.4', 'webTools', true);
+    mocks.config = setDefault(setEnabled(createDefaultConfig(), true), 'webTools', true);
     const oauthHarness = harness(oauth); const prompt = await oauthHarness.handlers.get('before_agent_start')!({ systemPrompt: 'Sero and project context' }, oauthHarness.ctx as never);
     expect(prompt).toEqual({ systemPrompt: expect.stringContaining('OpenAI') }); expect(oauthHarness.active()).toContain('openai_extender_web_search');
     const oauthBody = { model: 'gpt-5.4', input: [], marker: 'unchanged' };
@@ -60,7 +60,7 @@ describe('extension lifecycle', () => {
     mocks.config = createDefaultConfig(); await oauthHarness.handlers.get('model_select')!({ model: oauth }, oauthHarness.ctx as never);
     expect(oauthHarness.active()).toEqual(['read', 'other_tool']); expect(await oauthHarness.handlers.get('before_agent_start')!({ systemPrompt: 'Sero and project context' }, oauthHarness.ctx as never)).toBeUndefined();
 
-    mocks.config = setOverride(setOverride(setModelEnabled(createDefaultConfig(), 'openai/gpt-5.4', true), 'openai/gpt-5.4', 'fastMode', true), 'openai/gpt-5.4', 'verbosity', 'high');
+    mocks.config = setDefault(setDefault(setEnabled(createDefaultConfig(), true), 'fastMode', true), 'verbosity', 'high');
     const apiHarness = harness(); await apiHarness.handlers.get('before_agent_start')!({ systemPrompt: 'Sero and project context' }, apiHarness.ctx as never);
     expect(apiHarness.handlers.get('before_provider_request')!({ payload: { model: 'gpt-5.4', input: [] } }, apiHarness.ctx as never)).toMatchObject({ service_tier: 'priority', text: { verbosity: 'high' } });
   });

@@ -48,6 +48,23 @@
             "component": "OpenAIModelSettings",
             "description": "Optional behavior for compatible OpenAI models",
             "icon": "bot"
+          },
+          {
+            "id": "openai-chat-shortcut",
+            "extensionPoint": "ui.chat.model-extension",
+            "component": "OpenAIChatShortcut",
+            "models": [
+              { "provider": "openai", "api": "openai-responses", "modelId": "gpt-5.4" },
+              { "provider": "openai", "api": "openai-responses", "modelId": "gpt-5.3-codex" },
+              { "provider": "openai", "api": "openai-responses", "modelId": "gpt-4.1" },
+              { "provider": "openai-codex", "api": "openai-codex-responses", "modelId": "gpt-5.3-codex-spark" },
+              { "provider": "openai-codex", "api": "openai-codex-responses", "modelId": "gpt-5.4" },
+              { "provider": "openai-codex", "api": "openai-codex-responses", "modelId": "gpt-5.4-mini" },
+              { "provider": "openai-codex", "api": "openai-codex-responses", "modelId": "gpt-5.5" },
+              { "provider": "openai-codex", "api": "openai-codex-responses", "modelId": "gpt-5.6-luna" },
+              { "provider": "openai-codex", "api": "openai-codex-responses", "modelId": "gpt-5.6-sol" },
+              { "provider": "openai-codex", "api": "openai-codex-responses", "modelId": "gpt-5.6-terra" }
+            ]
           }
         ]
       }
@@ -62,6 +79,7 @@
       "minSeroVersion": "0.8.0-beta.0",
       "requiredHostCapabilities": [
         "ui.admin.model-settings",
+        "ui.chat.model-extension",
         "appAgent.invokeTool",
         "tool.cli"
       ],

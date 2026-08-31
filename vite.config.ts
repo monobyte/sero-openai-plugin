@@ -8,7 +8,7 @@ export default defineConfig({
   base: process.env.NODE_ENV === 'production' ? './' : '/',
   plugins: [react(), tailwindcss(), seroPluginCssScope({ pluginId: 'openai-extender', allowGlobalSelectors: true }), federation({
     name: 'sero_openai_extender', filename: 'remoteEntry.js', dts: false, manifest: true,
-    exposes: { './OpenAIApp': './ui/OpenAIApp.tsx', './OpenAIModelSettings': './ui/OpenAIModelSettings.tsx' },
+    exposes: { './OpenAIApp': './ui/OpenAIApp.tsx', './OpenAIModelSettings': './ui/OpenAIModelSettings.tsx', './OpenAIChatShortcut': './ui/OpenAIChatShortcut.tsx' },
     shared: { react: { singleton: true }, 'react/': { singleton: true }, 'react-dom': { singleton: true }, 'react-dom/': { singleton: true } },
   })],
   server: { port: 5200, strictPort: true, origin: 'http://localhost:5200' },

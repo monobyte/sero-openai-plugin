@@ -1,6 +1,6 @@
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { EnhancementSettings, OpenAIModelEnhancementConfig } from '../shared/config';
-import { findCompatibility, modelKey, type OpenAICompatibilityRecord } from '../shared/compatibility';
+import { findCompatibility, type OpenAICompatibilityRecord } from '../shared/compatibility';
 import { effectiveSettings } from '../shared/state';
 
 export const OWNED_TOOLS = ['openai_extender_web_search', 'openai_extender_read_page', 'openai_extender_image', 'openai_extender_describe_image', 'openai_extender_settings'] as const;
@@ -11,7 +11,7 @@ export function resolveActive(config: OpenAIModelEnhancementConfig, model: Model
   if (!model) return undefined;
   const compatibility = findCompatibility(model.provider, model.api, model.id);
   if (!compatibility) return undefined;
-  const settings = effectiveSettings(config, modelKey(model.provider, model.id));
+  const settings = effectiveSettings(config);
   return settings ? { compatibility, settings } : undefined;
 }
 export function desiredTools(active: ActiveEnhancement | undefined): string[] {

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultConfig } from '../../shared/config';
-import { setModelEnabled, setOverride } from '../../shared/state';
+import { setDefault, setEnabled } from '../../shared/state';
 import { adaptSystemPrompt, desiredTools, reconcileTools, resolveActive, rewriteProviderPayload } from '../behavior';
 
 const model = (provider = 'openai', id = 'gpt-5.4', api = 'openai-responses') => ({ provider, id, api }) as never;
 function active(fastMode: boolean, verbosity: 'off' | 'low' | 'medium' | 'high') {
-  let config = setModelEnabled(createDefaultConfig(), 'openai/gpt-5.4', true);
-  config = setOverride(config, 'openai/gpt-5.4', 'fastMode', fastMode);
-  config = setOverride(config, 'openai/gpt-5.4', 'verbosity', verbosity);
+  let config = setEnabled(createDefaultConfig(), true);
+  config = setDefault(config, 'fastMode', fastMode);
+  config = setDefault(config, 'verbosity', verbosity);
   return resolveActive(config, model())!;
 }
 
@@ -15,7 +15,13 @@ describe('extension behavior', () => {
   it('keeps activation exact for disabled, unsupported, and different routes', () => {
     expect(resolveActive(createDefaultConfig(), model())).toBeUndefined();
     expect(resolveActive(createDefaultConfig(), model('openai-codex', 'gpt-5.4', 'openai-codex-responses'))).toBeUndefined();
-    expect(resolveActive(setModelEnabled(createDefaultConfig(), 'openai/gpt-5.4', true), model('openai-codex', 'gpt-5.4', 'openai-codex-responses'))).toBeUndefined();
+    expect(resolveActive(setEnabled(createDefaultConfig(), true), model('openai-codex', 'gpt-5.4', 'openai-responses'))).toBeUndefined();
+  });
+  it('uses the global switch for every compatible API-key and OAuth model', () => {
+    const config = setEnabled(createDefaultConfig(), true);
+    expect(resolveActive(config, model('openai', 'gpt-5.4', 'openai-responses'))).toBeDefined();
+    expect(resolveActive(config, model('openai-codex', 'gpt-5.6-luna', 'openai-codex-responses'))).toBeDefined();
+    expect(resolveActive(config, model('anthropic', 'claude-sonnet-4-6', 'anthropic-messages'))).toBeUndefined();
   });
   it('appends prompt guidance without replacing existing context', () => {
     const value = adaptSystemPrompt('Sero context\nOther extension', active(false, 'off'));
@@ -35,8 +41,8 @@ describe('extension behavior', () => {
     expect(desiredTools(textOnly)).toContain('openai_extender_describe_image');
   });
   it('activates independent tool groups', () => {
-    let config = setModelEnabled(createDefaultConfig(), 'openai/gpt-5.4', true);
-    config = setOverride(config, 'openai/gpt-5.4', 'webTools', true);
+    let config = setEnabled(createDefaultConfig(), true);
+    config = setDefault(config, 'webTools', true);
     expect(desiredTools(resolveActive(config, model()))).toEqual(['openai_extender_web_search', 'openai_extender_read_page']);
   });
   for (const verbosity of ['off', 'low', 'medium', 'high'] as const) for (const fast of [false, true]) {

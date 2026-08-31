@@ -8,8 +8,6 @@ import { createDefaultConfig, type OpenAIModelEnhancementConfig } from '../../sh
 const runtime = vi.hoisted(() => ({
   state: undefined as OpenAIModelEnhancementConfig | undefined,
   listeners: new Set<(value: OpenAIModelEnhancementConfig) => void>(),
-  run: vi.fn(),
-  groups: [{ provider: 'openai', models: [{ modelId: 'gpt-5.4' }] }],
 }));
 
 vi.mock('@sero-ai/app-runtime', async () => {
@@ -18,10 +16,13 @@ vi.mock('@sero-ai/app-runtime', async () => {
     useAppState: (initial: OpenAIModelEnhancementConfig) => {
       const [value, setValue] = React.useState(runtime.state ?? initial);
       React.useEffect(() => { runtime.listeners.add(setValue); return () => { runtime.listeners.delete(setValue); }; }, []);
-      return [value, vi.fn(), true];
+      const update = (updater: (value: OpenAIModelEnhancementConfig) => OpenAIModelEnhancementConfig) => {
+        const next = updater(runtime.state ?? initial);
+        runtime.state = next;
+        for (const listener of runtime.listeners) listener(next);
+      };
+      return [value, update, true];
     },
-    useAppTools: () => ({ run: runtime.run }),
-    useAvailableModels: () => ({ groups: runtime.groups, loading: false, error: null }),
   };
 });
 import OpenAIModelSettings from '../OpenAIModelSettings';
@@ -35,84 +36,44 @@ function button(container: HTMLElement, name: string): HTMLButtonElement {
   const result = [...container.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === name || entry.getAttribute('aria-label') === name);
   if (!(result instanceof HTMLButtonElement)) throw new Error(`Missing button ${name}`); return result;
 }
-function buttonContaining(container: HTMLElement, text: string): HTMLButtonElement {
-  const result = [...container.querySelectorAll('button')].find((entry) => entry.textContent?.includes(text));
-  if (!(result instanceof HTMLButtonElement)) throw new Error(`Missing button containing ${text}`); return result;
-}
-async function flush(): Promise<void> { await act(async () => { await Promise.resolve(); await Promise.resolve(); }); }
-
-beforeEach(() => { runtime.state = createDefaultConfig(); runtime.listeners.clear(); runtime.run.mockReset(); runtime.groups = [{ provider: 'openai', models: [{ modelId: 'gpt-5.4' }] }]; });
+beforeEach(() => { runtime.state = createDefaultConfig(); runtime.listeners.clear(); });
 afterEach(() => { for (const root of roots) act(() => root.unmount()); roots = []; document.body.replaceChildren(); });
 
 describe('OpenAIModelSettings', () => {
-  it('keeps a failed save draft and reset restores the watched saved state', async () => {
-    runtime.run.mockRejectedValueOnce(new Error('Save failed safely.'));
-    const view = render(<OpenAIModelSettings />); const web = button(view, 'Web tools');
-    act(() => web.click()); act(() => button(view, 'Save').click()); await flush();
-    expect(view.querySelector('[role="status"]')?.textContent).toBe('Save failed safely.');
-    expect(web.getAttribute('aria-checked')).toBe('true');
-    act(() => button(view, 'Reset').click());
-    expect(web.getAttribute('aria-checked')).toBe('false');
-  });
-
-  it('shows busy and success states and refreshes a second mount from the shared watcher', async () => {
-    runtime.run.mockImplementation(async (_name: string, params: { value: OpenAIModelEnhancementConfig }) => {
-      await Promise.resolve(); runtime.state = params.value;
-      for (const listener of runtime.listeners) listener(params.value);
-      return { text: 'saved', content: [], details: {}, isError: false };
-    });
-    const first = render(<OpenAIModelSettings />); const second = render(<OpenAIModelSettings />);
-    act(() => button(first, 'Web tools').click()); act(() => button(first, 'Save').click());
-    expect(button(first, 'Saving…').disabled).toBe(true); await flush();
-    expect(first.querySelector('[role="status"]')?.textContent).toBe('Saved');
-    expect(button(second, 'Web tools').getAttribute('aria-checked')).toBe('true');
-    expect(runtime.run).toHaveBeenCalledWith('openai_extender_settings', expect.objectContaining({ action: 'save' }));
-  });
-
-  it('provides named native controls and polite status output', () => {
+  it('shows one global switch and no model list or per-model copy', () => {
     const view = render(<OpenAIModelSettings />);
-    expect(button(view, 'Web tools').getAttribute('role')).toBe('switch');
-    expect(view.querySelector('select[aria-label="Verbosity"]')).not.toBeNull();
-    expect(view.querySelector('[role="status"][aria-live="polite"]')).not.toBeNull();
-    expect(view.textContent).toContain('Use priority processing for API-key and OAuth requests.');
+    expect(button(view, 'Enable OpenAI enhancements').getAttribute('aria-checked')).toBe('false');
+    expect(view.textContent).toContain('Applies to all compatible OpenAI models.');
+    expect(view.textContent).not.toContain('Compatible models');
+    expect(view.textContent).not.toContain('Each compatible model requires explicit opt-in');
+    expect(view.textContent).not.toContain('Base values for each model');
+    expect(view.textContent).not.toContain('Save');
+    expect(view.textContent).not.toContain('Reset');
   });
 
-  it('shows API-key and OAuth routes separately and disabled in both mounts', () => {
-    runtime.groups = [{ provider: 'openai', models: [{ modelId: 'gpt-5.4' }] }, { provider: 'openai-codex', models: [{ modelId: 'gpt-5.4' }, { modelId: 'gpt-5.5' }] }];
+  it('auto-saves changes and refreshes every mounted view', () => {
     const first = render(<OpenAIModelSettings />); const second = render(<OpenAIModelSettings />);
-    for (const view of [first, second]) {
-      expect(view.textContent).toContain('GPT-5.4'); expect(view.textContent).toContain('GPT-5.4 (OAuth)'); expect(view.textContent).toContain('GPT-5.5 (OAuth)');
-      expect(view.textContent?.match(/Not enabled/g)).toHaveLength(3);
-    }
+    act(() => button(first, 'Enable OpenAI enhancements').click());
+    act(() => button(first, 'Web tools').click());
+    expect(runtime.state).toMatchObject({ version: 2, enabled: true, defaults: { webTools: true } });
+    expect(button(second, 'Enable OpenAI enhancements').getAttribute('aria-checked')).toBe('true');
+    expect(button(second, 'Web tools').getAttribute('aria-checked')).toBe('true');
   });
-  it('enables and saves the selected OAuth route without changing the API-key route', async () => {
-    runtime.groups = [{ provider: 'openai', models: [{ modelId: 'gpt-5.4' }] }, { provider: 'openai-codex', models: [{ modelId: 'gpt-5.4' }] }];
-    runtime.run.mockResolvedValue({ text: 'saved', content: [], details: {}, isError: false });
-    const view = render(<OpenAIModelSettings />); act(() => buttonContaining(view, 'GPT-5.4 (OAuth)').click());
-    act(() => button(view, 'Use enhancements with GPT-5.4 (OAuth)').click()); act(() => button(view, 'Save').click()); await flush();
-    const saved = runtime.run.mock.calls[0][1].value as OpenAIModelEnhancementConfig;
-    expect(saved.models['openai-codex/gpt-5.4']?.enabled).toBe(true); expect(saved.models['openai/gpt-5.4']).toBeUndefined();
+
+  it('keeps defaults editable while globally disabled', () => {
+    const view = render(<OpenAIModelSettings />);
+    expect(button(view, 'Web tools').disabled).toBe(false);
+    expect(view.querySelector('select[aria-label="Verbosity"]')).not.toBeNull();
+    expect(view.textContent).toContain('Use priority processing for API-key and OAuth requests.');
   });
 
   it('has no automatic accessibility violations at desktop and compact widths', async () => {
     for (const width of [900, 640]) {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
       const view = render(<OpenAIModelSettings />);
-      const result = await axe.run(view);
-      expect(result.violations).toEqual([]);
+      expect((await axe.run(view)).violations).toEqual([]);
       view.remove();
     }
   });
 
-  it('retains a draft when watched state changes and sends its original conflict base', async () => {
-    runtime.run.mockResolvedValue({ text: 'conflict', content: [], details: {}, isError: true });
-    const view = render(<OpenAIModelSettings />); const original = runtime.state!;
-    act(() => button(view, 'Web tools').click());
-    const external = { ...original, defaults: { ...original.defaults, fastMode: true } };
-    act(() => { runtime.state = external; for (const listener of runtime.listeners) listener(external); });
-    expect(button(view, 'Web tools').getAttribute('aria-checked')).toBe('true');
-    act(() => button(view, 'Save').click()); await flush();
-    expect(runtime.run).toHaveBeenCalledWith('openai_extender_settings', expect.objectContaining({ base: original }));
-    expect(button(view, 'Web tools').getAttribute('aria-checked')).toBe('true');
-  });
 });
