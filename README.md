@@ -15,7 +15,7 @@ Both API-key `openai` routes and authenticated `openai-codex` routes are support
 
 Provider defaults control prompt adaptation, owned web tools, image generation/edit, image fallback, Fast mode, and verbosity. A model stores only values that differ from the provider default. Disabling a model keeps its overrides but applies none of them.
 
-Fast mode sets `service_tier: "priority"` for API-key and OAuth requests. Verbosity `low`, `medium`, or `high` sets `text.verbosity`; `off` adds no plugin value. Rewrites are immutable and preserve unrelated fields. Web and image tools resolve authentication through Pi's configured OpenAI model registry. Generated images use the workspace `.sero/generated/openai-extender` path and normal image tool-result preview content.
+Fast mode sets `service_tier: "priority"` for API-key and OAuth requests. Verbosity `low`, `medium`, or `high` sets `text.verbosity`; `off` adds no plugin value. Rewrites are immutable and preserve unrelated fields. Web and image tools use the active model's Pi-managed authentication. API-key models use the OpenAI Responses and Images APIs. OAuth models use the Codex search and image endpoints, including `gpt-image-2` for generation and editing. Generated images use the workspace `.sero/generated/openai-extender` path and normal image tool-result preview content.
 
 ## Limitations
 

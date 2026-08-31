@@ -3,11 +3,12 @@ import { createImage, safeToolError, searchWeb, toToolError } from '../openai-cl
 
 afterEach(() => vi.unstubAllGlobals());
 const context = { model: { provider: 'openai', id: 'gpt-5.4', baseUrl: 'https://api.openai.com/v1' }, modelRegistry: { getApiKeyAndHeaders: vi.fn(async () => ({ ok: true, apiKey: 'secret', baseUrl: 'https://api.openai.com/v1' })) } } as never;
+const oauthToken = `header.${Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: 'account-1' } })).toString('base64url')}.signature`;
 const oauthContext = {
-  model: { provider: 'openai-codex', id: 'gpt-5.4', baseUrl: 'https://chatgpt.com/backend-api' },
+  model: { provider: 'openai-codex', id: 'gpt-5.6-luna', baseUrl: 'https://chatgpt.com/backend-api' },
   modelRegistry: {
-    find: vi.fn(() => ({ provider: 'openai', id: 'gpt-4.1', baseUrl: 'https://api.openai.com/v1' })),
-    getApiKeyAndHeaders: vi.fn(async () => ({ ok: true, apiKey: 'api-secret', baseUrl: 'https://api.openai.com/v1' })),
+    find: vi.fn(),
+    getApiKeyAndHeaders: vi.fn(async () => ({ ok: true, apiKey: oauthToken, baseUrl: 'https://chatgpt.com/backend-api' })),
   },
 };
 describe('OpenAI client', () => {
@@ -15,15 +16,19 @@ describe('OpenAI client', () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output_text: 'answer', output: [{ content: [{ annotations: [{ url: 'https://example.com', title: 'Example' }] }] }] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     await expect(searchWeb(context, 'query', new AbortController().signal)).resolves.toContain('https://example.com');
-    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ Authorization: 'Bearer secret' });
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('authorization')).toBe('Bearer secret');
   });
-  it('uses the configured API-key route for tools on an OAuth model', async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output_text: 'answer', output: [{ content: [{ annotations: [{ url: 'https://example.com' }] }] }] }), { status: 200 }));
+  it('uses the native Codex search route for tools on an OAuth model', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output: 'answer', results: [{ url: 'https://example.com', title: 'Example' }] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     await searchWeb(oauthContext as never, 'query', new AbortController().signal);
-    expect(oauthContext.modelRegistry.find).toHaveBeenCalledWith('openai', 'gpt-4.1');
-    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ Authorization: 'Bearer api-secret' });
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).model).toBe('gpt-4.1');
+    expect(oauthContext.modelRegistry.find).not.toHaveBeenCalled();
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://chatgpt.com/backend-api/codex/alpha/search');
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    expect(headers.get('authorization')).toBe(`Bearer ${oauthToken}`);
+    expect(headers.get('chatgpt-account-id')).toBe('account-1');
+    expect(headers.get('originator')).toBe('codex_cli_rs');
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({ model: 'gpt-5.6-luna', commands: { search_query: [{ q: 'query' }] }, settings: { allowed_callers: ['direct'], external_web_access: true } });
   });
   it('does not expose provider payloads or credentials in errors', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('raw sk-secret payload', { status: 401 })));
@@ -50,5 +55,16 @@ describe('OpenAI client', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/images/generations');
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ model: 'gpt-image-1', prompt: 'seedling' });
     expect(String(fetchMock.mock.calls[1][0])).toContain('/images/edits');
+  });
+  it('uses native Codex OAuth image generation and JSON edits', async () => {
+    const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64');
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ data: [{ b64_json: png }] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await createImage(oauthContext as never, 'seedling', new AbortController().signal);
+    await createImage(oauthContext as never, 'edit', new AbortController().signal, new Blob([new Uint8Array([1])], { type: 'image/png' }));
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://chatgpt.com/backend-api/codex/images/generations');
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ model: 'gpt-image-2', prompt: 'seedling', background: 'auto', quality: 'auto', size: 'auto' });
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://chatgpt.com/backend-api/codex/images/edits');
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toMatchObject({ model: 'gpt-image-2', prompt: 'edit', images: [{ image_url: 'data:image/png;base64,AQ==' }] });
   });
 });
