@@ -1,110 +1,94 @@
-/**
- * Kanban state file I/O and formatting helpers.
- *
- * Extracted from index.ts for file size compliance.
- */
-
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { createDefaultConfig, type OpenAIModelEnhancementConfig } from '../shared/config';
+import { parseConfig } from '../shared/state';
 
-import type { KanbanState, Card } from '../shared/types';
-import {
-  createDefaultKanbanState,
-  normalizeKanbanState,
-  COLUMNS,
-  COLUMN_LABELS,
-  PRIORITY_ORDER,
-} from '../shared/types';
-
-// ── State file path ────────────────────────────────────────────
-
-const STATE_REL_PATH = path.join('.sero', 'apps', 'kanban', 'state.json');
-
-export function resolveStatePath(cwd: string): string {
-  return path.join(cwd, STATE_REL_PATH);
+export interface AtomicFileSystem {
+  mkdir: typeof fs.mkdir;
+  open: typeof fs.open;
+  rename: typeof fs.rename;
+  rm: typeof fs.rm;
 }
 
-// ── File I/O (atomic writes) ───────────────────────────────────
-
-function isMissingFileError(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+export function resolveStatePath(env: NodeJS.ProcessEnv = process.env, home = os.homedir()): string {
+  const seroHome = env.SERO_HOME ?? path.join(home, '.sero-ui');
+  return path.join(seroHome, 'apps', 'openai-extender', 'state.json');
 }
-
-function createStateReadError(filePath: string, error: unknown): Error {
-  const detail = error instanceof Error ? error.message : String(error);
-  return new Error(
-    `Kanban board state at ${filePath} is unreadable. Repair or remove the malformed file before retrying. Original error: ${detail}`,
-  );
-}
-
-export async function readState(filePath: string): Promise<KanbanState> {
+function isMissing(error: unknown): boolean { return error instanceof Error && 'code' in error && error.code === 'ENOENT'; }
+export async function readConfig(filePath: string): Promise<OpenAIModelEnhancementConfig> {
   try {
-    const raw = await fs.readFile(filePath, 'utf8');
-    return normalizeKanbanState(JSON.parse(raw));
+    const value: unknown = JSON.parse(await fs.readFile(filePath, 'utf8'));
+    return value === null ? createDefaultConfig() : parseConfig(value);
+  }
+  catch (error) {
+    if (isMissing(error)) return createDefaultConfig();
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`OpenAI enhancement state at ${filePath} is unreadable. The saved file was preserved. ${detail}`);
+  }
+}
+export async function writeConfig(filePath: string, config: OpenAIModelEnhancementConfig, io: AtomicFileSystem = fs): Promise<void> {
+  const validated = parseConfig(config);
+  await io.mkdir(path.dirname(filePath), { recursive: true });
+  const temporary = `${filePath}.tmp.${process.pid}.${Date.now()}`;
+  try {
+    const handle = await io.open(temporary, 'wx', 0o600);
+    try { await handle.writeFile(`${JSON.stringify(validated, null, 2)}\n`, 'utf8'); await handle.sync(); }
+    finally { await handle.close(); }
+    await io.rename(temporary, filePath);
+  } finally { await io.rm(temporary, { force: true }); }
+}
+
+function isAlreadyExists(error: unknown): boolean { return error instanceof Error && 'code' in error && error.code === 'EEXIST'; }
+function isMissingFile(error: unknown): boolean { return error instanceof Error && 'code' in error && error.code === 'ENOENT'; }
+
+interface LockOwner { pid: number; createdAt: number }
+
+function processIsAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; }
+  catch (error) { return error instanceof Error && 'code' in error && error.code === 'EPERM'; }
+}
+
+async function removeStaleLock(lockPath: string, now = Date.now()): Promise<void> {
+  let owner: LockOwner | undefined;
+  let modifiedAt = 0;
+  try {
+    const [raw, stat] = await Promise.all([fs.readFile(lockPath, 'utf8'), fs.stat(lockPath)]);
+    modifiedAt = stat.mtimeMs;
+    const parsed = JSON.parse(raw) as Partial<LockOwner>;
+    if (typeof parsed.pid === 'number' && typeof parsed.createdAt === 'number') owner = parsed as LockOwner;
   } catch (error) {
-    if (isMissingFileError(error)) {
-      return createDefaultKanbanState();
-    }
-    throw createStateReadError(filePath, error);
+    if (isMissingFile(error)) return;
   }
+  const stale = owner ? !processIsAlive(owner.pid) || now - owner.createdAt > 30_000 : now - modifiedAt > 30_000;
+  if (!stale) return;
+  try { await fs.rm(lockPath); }
+  catch (error) { if (!isMissingFile(error)) throw error; }
 }
 
-export async function writeState(filePath: string, state: KanbanState): Promise<void> {
-  const dir = path.dirname(filePath);
-  await fs.mkdir(dir, { recursive: true });
-
-  const tmpPath = `${filePath}.tmp.${Date.now()}`;
-  await fs.writeFile(tmpPath, JSON.stringify(normalizeKanbanState(state), null, 2), 'utf8');
-  await fs.rename(tmpPath, filePath);
-}
-
-// ── Formatting ──────────────────────────────────────────────────
-
-export function formatCard(card: Card, verbose = false): string {
-  const priority = card.priority === 'critical' ? '!!!' : card.priority === 'high' ? '!!' : card.priority === 'medium' ? '!' : '';
-  const status =
-    card.status === 'agent-working' ? ' [working]' :
-    card.status === 'waiting-input' ? ' [waiting]' :
-    card.status === 'paused' ? ' [paused]' :
-    card.status === 'failed' ? ' [FAILED]' : '';
-  const blocked = card.blockedBy?.length
-    ? ` 🔒 blocked by ${card.blockedBy.map((d) => `#${d}`).join(', ')}`
-    : '';
-
-  let line = `#${card.id} ${priority ? `(${priority}) ` : ''}${card.title} — ${COLUMN_LABELS[card.column]}${status}${blocked}`;
-
-  if (verbose) {
-    if (card.description) line += `\n   ${card.description}`;
-    if (card.acceptance.length > 0) {
-      line += `\n   Acceptance: ${card.acceptance.map((a) => `✓ ${a}`).join('; ')}`;
+export async function updateConfig(
+  filePath: string,
+  updater: (current: OpenAIModelEnhancementConfig) => OpenAIModelEnhancementConfig,
+): Promise<OpenAIModelEnhancementConfig> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const lockPath = `${filePath}.lock`;
+  let lock: Awaited<ReturnType<typeof fs.open>> | undefined;
+  for (let attempt = 0; attempt < 100 && !lock; attempt += 1) {
+    try {
+      lock = await fs.open(lockPath, 'wx', 0o600);
+      await lock.writeFile(JSON.stringify({ pid: process.pid, createdAt: Date.now() } satisfies LockOwner), 'utf8');
+      await lock.sync();
     }
-    if (card.subtasks.length > 0) {
-      const done = card.subtasks.filter((s) => s.status === 'completed').length;
-      line += `\n   Subtasks: ${done}/${card.subtasks.length}`;
-    }
-    if (card.branch) line += `\n   Branch: ${card.branch}`;
-    if (card.prUrl) line += `\n   PR: ${card.prUrl}`;
-    if (card.error) line += `\n   Error: ${card.error}`;
-  }
-
-  return line;
-}
-
-export function formatBoard(state: KanbanState): string {
-  if (state.cards.length === 0) return 'No cards on the board.';
-
-  const lines: string[] = [];
-  for (const col of COLUMNS) {
-    const cards = state.cards
-      .filter((c) => c.column === col)
-      .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
-    if (cards.length === 0) continue;
-
-    lines.push(`\n## ${COLUMN_LABELS[col]} (${cards.length})`);
-    for (const card of cards) {
-      lines.push(`  ${formatCard(card)}`);
+    catch (error) {
+      if (!isAlreadyExists(error)) throw error;
+      await removeStaleLock(lockPath);
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
-
-  return lines.join('\n');
+  if (!lock) throw new Error('OpenAI settings are busy. Try again.');
+  try {
+    const next = parseConfig(updater(await readConfig(filePath)));
+    await writeConfig(filePath, next);
+    return next;
+  } finally { await lock.close(); await fs.rm(lockPath, { force: true }); }
 }

@@ -1,111 +1,112 @@
 {
-  "name": "@sero-ai/plugin-kanban",
-  "version": "0.2.1",
-  "description": "Kanban dev board for Sero - AI-driven development workflow",
+  "name": "@sero-ai/plugin-openai-extender",
+  "version": "0.1.0",
+  "description": "Optional OpenAI model enhancements for Sero",
   "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "sero-plugin",
+    "openai"
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run build:extension",
+    "build:extension": "esbuild extension/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/extension/index.js --external:@earendil-works/pi-agent-core --external:@earendil-works/pi-ai --external:@earendil-works/pi-coding-agent",
     "test": "vitest run --root .",
-    "test:watch": "vitest --root .",
-    "typecheck": "tsc --noEmit -p ui/tsconfig.json && tsc --noEmit -p extension/tsconfig.json && tsc --noEmit -p runtime/tsconfig.json"
+    "typecheck": "tsc --noEmit -p ui/tsconfig.json && tsc --noEmit -p extension/tsconfig.json",
+    "pack:test": "npm pack --dry-run"
   },
   "pi": {
     "extensions": [
-      "./extension/index.ts"
-    ],
-    "prompts": [
-      "./prompts/brainstorm.md",
-      "./prompts/card-enhance.md"
+      "./dist/extension/index.js"
     ]
   },
   "sero": {
     "app": {
-      "id": "kanban",
+      "id": "openai-extender",
+      "scope": "global",
       "styleIsolation": "scope",
-      "name": "Kanban",
-      "icon": "columns-3",
-      "stateFile": ".sero/apps/kanban/state.json",
+      "name": "OpenAI Model Enhancements",
+      "icon": "bot",
+      "stateFile": ".sero/apps/openai-extender/state.json",
       "ui": "./dist/ui/remoteEntry.js",
-      "component": "KanbanApp",
-      "runtime": "./runtime/index.ts",
-      "devPort": 5189,
-      "widgets": [
-        {
-          "id": "board-overview",
-          "name": "Board Overview",
-          "component": "KanbanWidget",
-          "description": "Card counts by column with priority distribution",
-          "defaultSize": {
-            "w": 2,
-            "h": 2
-          },
-          "minSize": {
-            "w": 2,
-            "h": 2
-          },
-          "maxSize": {
-            "w": 4,
-            "h": 3
+      "component": "OpenAIApp",
+      "devPort": 5200,
+      "contributes": {
+        "components": [
+          {
+            "id": "openai-model-settings",
+            "extensionPoint": "ui.admin.model-settings",
+            "name": "OpenAI",
+            "component": "OpenAIModelSettings",
+            "description": "Optional behavior for compatible OpenAI models",
+            "icon": "bot"
           }
-        }
-      ]
+        ]
+      }
     },
     "plugin": {
-      "category": "productivity",
+      "category": "integrations",
       "tags": [
-        "kanban",
-        "planning",
-        "workflow"
+        "openai",
+        "models",
+        "tools"
       ],
-      "minSeroVersion": "0.1.0",
-      "runtimeAbi": 3,
+      "minSeroVersion": "0.8.0-beta.0",
       "requiredHostCapabilities": [
+        "ui.admin.model-settings",
         "appAgent.invokeTool",
-        "tool.cli",
-        "appRuntime.background"
+        "tool.cli"
       ],
-      "preBuilt": false,
       "bridgeTools": [
-        "kanban"
-      ]
+        "openai_extender_settings"
+      ],
+      "bundleExtensions": true,
+      "preBuilt": false,
+      "runtimeAbi": 3
     }
   },
   "dependencies": {
-    "@sero-ai/extension-runtime": "^0.2.0",
     "typebox": "^1.1.37"
   },
   "peerDependencies": {
-    "@earendil-works/pi-agent-core": ">=0.83.0",
-    "@earendil-works/pi-ai": ">=0.83.0",
-    "@earendil-works/pi-coding-agent": ">=0.83.0",
-    "@earendil-works/pi-tui": ">=0.83.0",
-    "zod": ">=4.0.0"
+    "@earendil-works/pi-agent-core": ">=0.84.2",
+    "@earendil-works/pi-ai": ">=0.84.2",
+    "@earendil-works/pi-coding-agent": ">=0.84.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
-    "@sero-ai/plugin-vite": "^0.1.0",
+    "@earendil-works/pi-agent-core": "0.84.2",
+    "@earendil-works/pi-ai": "0.84.2",
+    "@earendil-works/pi-coding-agent": "0.84.2",
     "@module-federation/vite": "1.19.1",
     "@sero-ai/app-runtime": "^0.4.1",
-    "@sero-ai/common": "^0.11.0",
+    "@sero-ai/plugin-vite": "^0.1.0",
+    "@sero-ai/ui": "^0.5.0",
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^22.19.11",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
+    "axe-core": "^4.11.1",
     "jsdom": "^27.0.0",
-    "motion": "^12.34.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "shadcn": "^3.8.5",
     "tailwindcss": "^4.1.18",
+    "tw-animate-css": "^1.4.0",
     "typescript": "^5.9.3",
     "vite": "^6.4.1",
-    "vitest": "^4.0.18",
-    "@earendil-works/pi-agent-core": "0.83.0",
-    "@earendil-works/pi-ai": "0.83.0",
-    "@earendil-works/pi-coding-agent": "0.83.0",
-    "@earendil-works/pi-tui": "0.83.0"
-  }
+    "vitest": "^4.0.18"
+  },
+  "main": "index.js",
+  "author": "",
+  "license": "ISC"
 }
