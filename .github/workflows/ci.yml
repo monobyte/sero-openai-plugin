@@ -40,7 +40,7 @@ jobs:
 
           const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
           const scripts = pkg.scripts || {};
-          const checks = ['typecheck', 'build'];
+          const checks = ['typecheck', 'test', 'build'];
 
           for (const check of checks) {
             if (!scripts[check]) {

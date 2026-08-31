@@ -35,7 +35,6 @@
       "styleIsolation": "scope",
       "name": "OpenAI Model Enhancements",
       "icon": "bot",
-      "stateFile": ".sero/apps/openai-extender/state.json",
       "ui": "./dist/ui/remoteEntry.js",
       "component": "OpenAIApp",
       "devPort": 5200,
@@ -82,9 +81,6 @@
         "ui.chat.model-extension",
         "appAgent.invokeTool",
         "tool.cli"
-      ],
-      "bridgeTools": [
-        "openai_extender_settings"
       ],
       "bundleExtensions": true,
       "preBuilt": false,

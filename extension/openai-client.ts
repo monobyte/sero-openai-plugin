@@ -13,6 +13,18 @@ function requestModel(ctx: ExtensionContext): Model<Api> | undefined {
   if (ctx.model?.provider === 'openai' || ctx.model?.provider === 'openai-codex') return ctx.model;
   return ctx.modelRegistry.find('openai', 'gpt-4.1');
 }
+async function apiKeyRequestAuth(ctx: ExtensionContext, modelId: string): Promise<RequestAuth> {
+  const model = ctx.modelRegistry.find('openai', modelId);
+  if (!model) throw new Error('OpenAI API-key model configuration is not available.');
+  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+  if (!auth.ok || !auth.apiKey) throw new Error('OpenAI API-key authentication is not configured.');
+  return {
+    baseUrl: (auth.baseUrl ?? model.baseUrl).replace(/\/$/, ''),
+    headers: { ...auth.headers, Authorization: `Bearer ${auth.apiKey}` },
+    modelId: model.id,
+    oauth: false,
+  };
+}
 async function requestAuth(ctx: ExtensionContext): Promise<RequestAuth> {
   const model = requestModel(ctx);
   if (!model) throw new Error('OpenAI API-key model configuration is not available.');
@@ -67,7 +79,8 @@ export async function searchWeb(ctx: ExtensionContext, query: string, signal: Ab
 }
 export async function describeImage(ctx: ExtensionContext, bytes: Uint8Array, mimeType: string, signal: AbortSignal): Promise<string> {
   const dataUrl = `data:${mimeType};base64,${Buffer.from(bytes).toString('base64')}`;
-  const response = await openAIJson<OpenAIResponse>(ctx, '/responses', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'gpt-4.1', input: [{ role: 'user', content: [{ type: 'input_text', text: 'Describe this image accurately and concisely.' }, { type: 'input_image', image_url: dataUrl }] }] }) });
+  const auth = await apiKeyRequestAuth(ctx, 'gpt-4.1');
+  const response = await openAIJson<OpenAIResponse>(ctx, '/responses', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: auth.modelId, input: [{ role: 'user', content: [{ type: 'input_text', text: 'Describe this image accurately and concisely.' }, { type: 'input_image', image_url: dataUrl }] }] }) }, Promise.resolve(auth));
   return response.output_text ?? response.output?.flatMap((item) => item.content ?? []).map((item) => item.text).filter(Boolean).join('\n') ?? 'No image description was returned.';
 }
 export async function createImage(ctx: ExtensionContext, prompt: string, signal: AbortSignal, image?: Blob): Promise<Uint8Array> {

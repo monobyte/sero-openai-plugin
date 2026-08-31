@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createImage, safeToolError, searchWeb, toToolError } from '../openai-client';
+import { createImage, describeImage, safeToolError, searchWeb, toToolError } from '../openai-client';
 
 afterEach(() => vi.unstubAllGlobals());
 const context = { model: { provider: 'openai', id: 'gpt-5.4', baseUrl: 'https://api.openai.com/v1' }, modelRegistry: { getApiKeyAndHeaders: vi.fn(async () => ({ ok: true, apiKey: 'secret', baseUrl: 'https://api.openai.com/v1' })) } } as never;
@@ -66,5 +66,28 @@ describe('OpenAI client', () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ model: 'gpt-image-2', prompt: 'seedling', background: 'auto', quality: 'auto', size: 'auto' });
     expect(String(fetchMock.mock.calls[1][0])).toBe('https://chatgpt.com/backend-api/codex/images/edits');
     expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toMatchObject({ model: 'gpt-image-2', prompt: 'edit', images: [{ image_url: 'data:image/png;base64,AQ==' }] });
+  });
+  it('uses API-key authentication for image fallback during an OAuth session', async () => {
+    const apiModel = { provider: 'openai', id: 'gpt-4.1', baseUrl: 'https://api.openai.com/v1' };
+    const modelRegistry = {
+      find: vi.fn(() => apiModel),
+      getApiKeyAndHeaders: vi.fn(async (model) => model === apiModel
+        ? { ok: true, apiKey: 'api-secret', baseUrl: apiModel.baseUrl }
+        : { ok: true, apiKey: oauthToken, baseUrl: 'https://chatgpt.com/backend-api' }),
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output_text: 'A cave painting.' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(describeImage({ ...oauthContext, modelRegistry } as never, Uint8Array.from([1]), 'image/png', new AbortController().signal)).resolves.toBe('A cave painting.');
+    expect(modelRegistry.find).toHaveBeenCalledWith('openai', 'gpt-4.1');
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://api.openai.com/v1/responses');
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('authorization')).toBe('Bearer api-secret');
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).model).toBe('gpt-4.1');
+  });
+  it('reports missing API-key authentication for OAuth image fallback', async () => {
+    const modelRegistry = {
+      find: vi.fn(() => ({ provider: 'openai', id: 'gpt-4.1', baseUrl: 'https://api.openai.com/v1' })),
+      getApiKeyAndHeaders: vi.fn(async () => ({ ok: false })),
+    };
+    await expect(describeImage({ ...oauthContext, modelRegistry } as never, Uint8Array.from([1]), 'image/png', new AbortController().signal)).rejects.toThrow('OpenAI API-key authentication is not configured.');
   });
 });

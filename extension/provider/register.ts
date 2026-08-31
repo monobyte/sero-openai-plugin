@@ -5,12 +5,17 @@ import { findCompatibility } from '../../shared/compatibility';
 import { createCodexStream } from './stream';
 import type { CodexModel, SettingsLoader } from './types';
 
-export function registerCodexProvider(pi: ExtensionAPI, loadSettings: SettingsLoader): () => void {
+export function registerCodexProvider(
+  pi: ExtensionAPI,
+  loadSettings: SettingsLoader,
+  trackSession: (sessionId: string) => void = () => undefined,
+): () => void {
   pi.registerProvider('openai-codex', {
     api: 'openai-codex-responses',
     streamSimple(model: Model<Api>, context: Context, options?: SimpleStreamOptions) {
       const compatible = findCompatibility(model.provider, model.api, model.id);
       if (!compatible || model.api !== 'openai-codex-responses') return stockCodexStream(model as unknown as CodexModel, context, options);
+      if (options?.sessionId) trackSession(options.sessionId);
       const codexModel = model as unknown as CodexModel;
       const output = createAssistantMessageEventStream();
       void (async () => {

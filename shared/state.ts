@@ -31,24 +31,3 @@ export function setEnabled(config: OpenAIModelEnhancementConfig, enabled: boolea
 export function setDefault<K extends keyof EnhancementSettings>(config: OpenAIModelEnhancementConfig, key: K, value: EnhancementSettings[K]): OpenAIModelEnhancementConfig {
   return { ...config, defaults: { ...config.defaults, [key]: value } };
 }
-
-function sameValue(left: unknown, right: unknown): boolean { return JSON.stringify(left) === JSON.stringify(right); }
-
-export function mergeDraft(
-  currentValue: OpenAIModelEnhancementConfig,
-  baseValue: OpenAIModelEnhancementConfig,
-  draftValue: OpenAIModelEnhancementConfig,
-): OpenAIModelEnhancementConfig {
-  const current = parseConfig(currentValue); const base = parseConfig(baseValue); const draft = parseConfig(draftValue);
-  let merged = current;
-  if (base.enabled !== draft.enabled) {
-    if (current.enabled !== base.enabled && current.enabled !== draft.enabled) throw new Error('OpenAI settings changed elsewhere at enabled. Reset and try again.');
-    merged = setEnabled(merged, draft.enabled);
-  }
-  for (const key of SETTING_KEYS) {
-    if (sameValue(base.defaults[key], draft.defaults[key])) continue;
-    if (!sameValue(current.defaults[key], base.defaults[key]) && !sameValue(current.defaults[key], draft.defaults[key])) throw new Error(`OpenAI settings changed elsewhere at defaults.${key}. Reset and try again.`);
-    merged = setDefault(merged, key, draft.defaults[key]);
-  }
-  return parseConfig(merged);
-}

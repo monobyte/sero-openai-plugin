@@ -66,6 +66,13 @@ describe('OpenAIModelSettings', () => {
     expect(view.querySelector('select[aria-label="Verbosity"]')).not.toBeNull();
     expect(view.textContent).toContain('Use priority processing for API-key and OAuth requests.');
   });
+  it('offers to reset malformed saved state', () => {
+    runtime.state = { version: 2, enabled: false } as OpenAIModelEnhancementConfig;
+    const view = render(<OpenAIModelSettings />);
+    expect(view.textContent).toContain('OpenAI settings could not be read.');
+    act(() => button(view, 'Reset settings').click());
+    expect(runtime.state).toEqual(createDefaultConfig());
+  });
 
   it('has no automatic accessibility violations at desktop and compact widths', async () => {
     for (const width of [900, 640]) {

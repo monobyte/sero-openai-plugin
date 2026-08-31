@@ -8,12 +8,17 @@ import { closeOwnedSockets } from './provider/continuation';
 
 export default function openAIExtender(pi: ExtensionAPI): void {
   let config: OpenAIModelEnhancementConfig | undefined;
+  const ownedSessionIds = new Set<string>();
   const reload = async (): Promise<void> => { config = await readConfig(resolveStatePath()); };
   const active = (model: Parameters<typeof resolveActive>[1]) => !config ? undefined : resolveActive(config, model);
   const reconcile = (model: Parameters<typeof resolveActive>[1]) => pi.setActiveTools(reconcileTools(pi.getActiveTools(), desiredTools(active(model))));
 
   registerOwnedTools(pi);
-  const unregisterProvider = registerCodexProvider(pi, async (model) => resolveActive(await readConfig(resolveStatePath()), model)?.settings);
+  const unregisterProvider = registerCodexProvider(
+    pi,
+    async (model) => resolveActive(await readConfig(resolveStatePath()), model)?.settings,
+    (sessionId) => ownedSessionIds.add(sessionId),
+  );
   pi.on('session_start', async (_event, ctx) => {
     try { await reload(); reconcile(ctx.model); }
     catch (error) { ctx.ui.notify(error instanceof Error ? error.message : 'OpenAI enhancement state could not be loaded.', 'warning'); reconcile(undefined); }
@@ -24,10 +29,15 @@ export default function openAIExtender(pi: ExtensionAPI): void {
   });
   pi.on('before_agent_start', async (event, ctx) => {
     try { await reload(); reconcile(ctx.model); }
-    catch { config = undefined; reconcile(undefined); return; }
+    catch (error) { ctx.ui.notify(error instanceof Error ? error.message : 'OpenAI enhancement state could not be loaded.', 'warning'); config = undefined; reconcile(undefined); return; }
     const nextPrompt = adaptSystemPrompt(event.systemPrompt, active(ctx.model));
     if (nextPrompt !== event.systemPrompt) return { systemPrompt: nextPrompt };
   });
   pi.on('before_provider_request', (event, ctx) => ctx.model?.provider === 'openai' ? rewriteProviderPayload(event.payload, active(ctx.model)) : event.payload);
-  pi.on('session_shutdown', () => { config = undefined; closeOwnedSockets(); unregisterProvider(); });
+  pi.on('session_shutdown', () => {
+    config = undefined;
+    for (const sessionId of ownedSessionIds) closeOwnedSockets(sessionId);
+    ownedSessionIds.clear();
+    unregisterProvider();
+  });
 }

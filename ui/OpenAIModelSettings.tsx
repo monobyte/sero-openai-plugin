@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { useAppState } from '@sero-ai/app-runtime';
-import { NativeSelect, NativeSelectOption, Switch } from '@sero-ai/ui';
+import { Button, NativeSelect, NativeSelectOption, Switch } from '@sero-ai/ui';
 import { createDefaultConfig, type EnhancementSettings, type OpenAIModelEnhancementConfig, type Verbosity } from '../shared/config';
 import { parseConfig, setDefault, setEnabled } from '../shared/state';
 import './styles.css';
@@ -22,7 +22,10 @@ const BOOLEAN_SETTINGS: BooleanSetting[] = [
 
 export function OpenAIModelSettings() {
   const [savedValue, updateSaved, ready] = useAppState<unknown>(createDefaultConfig());
-  const current = useMemo(() => parseConfig(savedValue), [savedValue]);
+  const current = useMemo(() => {
+    if (!ready) return undefined;
+    try { return parseConfig(savedValue); } catch { return undefined; }
+  }, [ready, savedValue]);
 
   const edit = (updater: (config: OpenAIModelEnhancementConfig) => OpenAIModelEnhancementConfig) => {
     updateSaved((previous) => updater(parseConfig(previous)));
@@ -30,6 +33,14 @@ export function OpenAIModelSettings() {
 
   if (!ready) {
     return <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading OpenAI settings…</div>;
+  }
+  if (!current) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-center">
+        <p className="text-sm text-muted-foreground">OpenAI settings could not be read.</p>
+        <Button type="button" size="sm" onClick={() => updateSaved(() => createDefaultConfig())}>Reset settings</Button>
+      </div>
+    );
   }
 
   const change = <K extends keyof EnhancementSettings>(key: K, value: EnhancementSettings[K]) => edit((config) => setDefault(config, key, value));

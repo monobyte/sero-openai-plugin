@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultConfig } from '../config';
 import { findCompatibility } from '../compatibility';
-import { effectiveSettings, mergeDraft, parseConfig, setDefault, setEnabled } from '../state';
+import { effectiveSettings, parseConfig, setDefault, setEnabled } from '../state';
 
 describe('OpenAI enhancement configuration', () => {
   it('starts globally disabled', () => {
@@ -44,11 +44,4 @@ describe('OpenAI enhancement configuration', () => {
     expect(findCompatibility('openai-codex', 'openai-codex-responses', 'gpt-5.3-codex-spark')?.nativeImageInput).toBe(false);
   });
 
-  it('rebases independent draft changes and rejects same-setting conflicts', () => {
-    const base = createDefaultConfig();
-    const current = setDefault(base, 'webTools', true);
-    const draft = setEnabled(setDefault(base, 'fastMode', true), true);
-    expect(mergeDraft(current, base, draft)).toMatchObject({ enabled: true, defaults: { webTools: true, fastMode: true } });
-    expect(() => mergeDraft(setDefault(base, 'verbosity', 'low'), base, setDefault(base, 'verbosity', 'high'))).toThrow('changed elsewhere');
-  });
 });

@@ -2,8 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createDefaultConfig } from '../../shared/config';
-import { setDefault } from '../../shared/state';
 import { registerOwnedTools } from '../tools';
 
 vi.mock('../web-security', () => ({ readPublicPage: vi.fn(async (url: string) => ({ url, body: `<html><script>secret()</script><body>${'page '.repeat(6_000)}</body></html>` })) }));
@@ -20,7 +18,7 @@ function tools() {
 }
 describe('owned tools', () => {
   it('registers search, page read, image, and fallback once', () => {
-    expect(tools().map((tool) => tool.name)).toEqual(['openai_extender_web_search', 'openai_extender_read_page', 'openai_extender_describe_image', 'openai_extender_image', 'openai_extender_settings']);
+    expect(tools().map((tool) => tool.name)).toEqual(['openai_extender_web_search', 'openai_extender_read_page', 'openai_extender_describe_image', 'openai_extender_image']);
   });
   it('bounds page text and includes its source URL', async () => {
     const tool = tools().find((entry) => entry.name === 'openai_extender_read_page')!;
@@ -34,16 +32,6 @@ describe('owned tools', () => {
     vi.mocked(readPublicPage).mockRejectedValueOnce(new DOMException('cancelled', 'AbortError'));
     const tool = tools().find((entry) => entry.name === 'openai_extender_read_page')!;
     await expect(tool.execute('id', { url: 'https://example.com' }, new AbortController().signal)).rejects.toThrow('OpenAI operation was cancelled.');
-  });
-  it('saves state through the plugin-owned tool', async () => {
-    const previous = process.env.SERO_HOME; process.env.SERO_HOME = await mkdtemp(path.join(os.tmpdir(), 'oai-tool-state-'));
-    try {
-      const base = createDefaultConfig(); const value = setDefault(base, 'fastMode', true);
-      const tool = tools().find((entry) => entry.name === 'openai_extender_settings')!;
-      await tool.execute('id', { action: 'save', base, value });
-      const saved = JSON.parse(await readFile(path.join(process.env.SERO_HOME, 'apps/openai-extender/state.json'), 'utf8'));
-      expect(saved.defaults.fastMode).toBe(true);
-    } finally { if (previous === undefined) delete process.env.SERO_HOME; else process.env.SERO_HOME = previous; }
   });
   it('writes a generated image through the normal preview result', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'oai-image-tool-'));

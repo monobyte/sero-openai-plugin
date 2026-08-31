@@ -28,13 +28,15 @@ describe('Codex provider registration', () => {
   it('selects the owned stream only for an enabled exact record', async () => {
     let registered: { streamSimple: (model: Model<'openai-codex-responses'>, context: Context, options?: SimpleStreamOptions) => ReturnType<typeof createAssistantMessageEventStream> } | undefined;
     const pi = { registerProvider: (_name: string, config: typeof registered) => { registered = config; }, unregisterProvider: vi.fn() };
-    registerCodexProvider(pi as never, async () => DEFAULT_SETTINGS);
+    const trackSession = vi.fn();
+    registerCodexProvider(pi as never, async () => DEFAULT_SETTINGS, trackSession);
     const completed = `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'r', status: 'completed', output: [], usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } } })}\n\n`;
     const fetcher = vi.fn(async () => new Response(completed, { status: 200 }));
     const before = mocks.stock.mock.calls.length;
     const token = `aaa.${Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: 'account' } })).toString('base64url')}.bbb`;
-    const result = await registered!.streamSimple(model('gpt-5.4'), context, { ...options, apiKey: token, fetch: fetcher }).result();
+    const result = await registered!.streamSimple(model('gpt-5.4'), context, { ...options, sessionId: 'session-1', apiKey: token, fetch: fetcher }).result();
     expect(result.stopReason).toBe('stop'); expect(fetcher).toHaveBeenCalledOnce(); expect(mocks.stock.mock.calls).toHaveLength(before);
+    expect(trackSession).toHaveBeenCalledWith('session-1');
   });
   it('preserves the built-in catalog, OAuth, headers, and filtering through Pi composition', async () => {
     let extension: ProviderConfigInput | undefined;

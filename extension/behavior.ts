@@ -3,7 +3,7 @@ import type { EnhancementSettings, OpenAIModelEnhancementConfig } from '../share
 import { findCompatibility, type OpenAICompatibilityRecord } from '../shared/compatibility';
 import { effectiveSettings } from '../shared/state';
 
-export const OWNED_TOOLS = ['openai_extender_web_search', 'openai_extender_read_page', 'openai_extender_image', 'openai_extender_describe_image', 'openai_extender_settings'] as const;
+export const OWNED_TOOLS = ['openai_extender_web_search', 'openai_extender_read_page', 'openai_extender_image', 'openai_extender_describe_image'] as const;
 export const ADAPTED_PROMPT = 'OpenAI model enhancements are active. Preserve Sero project instructions, skills, and active-tool guidance.';
 
 export interface ActiveEnhancement { compatibility: OpenAICompatibilityRecord; settings: EnhancementSettings }
@@ -23,7 +23,7 @@ export function desiredTools(active: ActiveEnhancement | undefined): string[] {
   ];
 }
 export function reconcileTools(current: readonly string[], desired: readonly string[]): string[] {
-  const owned = new Set<string>(OWNED_TOOLS);
+  const owned = new Set<string>([...OWNED_TOOLS, 'openai_extender_settings']);
   return [...current.filter((name) => !owned.has(name)), ...new Set(desired)];
 }
 export function adaptSystemPrompt(systemPrompt: string, active: ActiveEnhancement | undefined): string {

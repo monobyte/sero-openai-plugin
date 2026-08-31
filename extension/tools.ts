@@ -5,8 +5,6 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { createImage, describeImage, searchWeb, toToolError } from './openai-client';
 import { prepareOutputDirectory, readWorkspaceImage, validateImage } from './image-security';
-import { resolveStatePath, updateConfig } from './state-io';
-import { mergeDraft, parseConfig } from '../shared/state';
 import { readPublicPage } from './web-security';
 
 const MAX_PAGE_CHARS = 20_000;
@@ -60,16 +58,6 @@ export function registerOwnedTools(pi: ExtensionAPI): void {
         await fs.writeFile(outputPath, image, { flag: 'wx', mode: 0o600 });
         return { content: [{ type: 'text', text: `Image saved to ${outputPath}` }, { type: 'image', data: Buffer.from(image).toString('base64'), mimeType: mime }], details: { path: outputPath, preview: true } };
       } catch (error) { throw toToolError(error); }
-    },
-  });
-  pi.registerTool({
-    name: 'openai_extender_settings', label: 'Save OpenAI Settings', description: 'Save this plugin settings with conflict detection.',
-    parameters: Type.Object({ action: Type.Literal('save'), base: Type.Unknown(), value: Type.Unknown() }),
-    async execute(_id, params) {
-      const filePath = resolveStatePath();
-      const base = parseConfig(params.base); const value = parseConfig(params.value);
-      await updateConfig(filePath, (current) => mergeDraft(current, base, value));
-      return textResult('OpenAI settings saved.', { saved: true });
     },
   });
 }

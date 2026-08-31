@@ -24,7 +24,8 @@ describe('OpenAIChatShortcut', () => {
     act(() => button?.click());
     expect(runtime.open).toHaveBeenCalledWith('admin', {
       section: 'model',
-      modelSettingsKey: 'openai-extender:ui.admin.model-settings:openai-model-settings',
+      modelSettingsAppId: 'openai-extender',
+      modelSettingsContributionId: 'openai-model-settings',
     });
     act(() => root.unmount());
   });
@@ -34,6 +35,13 @@ describe('OpenAIChatShortcut', () => {
     const container = document.createElement('div'); document.body.append(container);
     const root = createRoot(container); act(() => root.render(<OpenAIChatShortcut />));
     expect(container.querySelector('button')?.getAttribute('aria-label')).toBe('Edit active OpenAI enhancements');
+    act(() => root.unmount());
+  });
+  it('does not throw when saved state is malformed', () => {
+    runtime.state = { version: 2, enabled: 'invalid' };
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container); act(() => root.render(<OpenAIChatShortcut />));
+    expect(container.querySelector('button')).toBeNull();
     act(() => root.unmount());
   });
 });
