@@ -9,6 +9,7 @@ const runtime = vi.hoisted(() => ({
   state: undefined as OpenAIModelEnhancementConfig | undefined,
   listeners: new Set<(value: OpenAIModelEnhancementConfig) => void>(),
   run: vi.fn(),
+  groups: [{ provider: 'openai', models: [{ modelId: 'gpt-5.4' }] }],
 }));
 
 vi.mock('@sero-ai/app-runtime', async () => {
@@ -20,7 +21,7 @@ vi.mock('@sero-ai/app-runtime', async () => {
       return [value, vi.fn(), true];
     },
     useAppTools: () => ({ run: runtime.run }),
-    useAvailableModels: () => ({ groups: [{ provider: 'openai', models: [{ modelId: 'gpt-5.4' }] }], loading: false, error: null }),
+    useAvailableModels: () => ({ groups: runtime.groups, loading: false, error: null }),
   };
 });
 import OpenAIModelSettings from '../OpenAIModelSettings';
@@ -34,9 +35,13 @@ function button(container: HTMLElement, name: string): HTMLButtonElement {
   const result = [...container.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === name || entry.getAttribute('aria-label') === name);
   if (!(result instanceof HTMLButtonElement)) throw new Error(`Missing button ${name}`); return result;
 }
+function buttonContaining(container: HTMLElement, text: string): HTMLButtonElement {
+  const result = [...container.querySelectorAll('button')].find((entry) => entry.textContent?.includes(text));
+  if (!(result instanceof HTMLButtonElement)) throw new Error(`Missing button containing ${text}`); return result;
+}
 async function flush(): Promise<void> { await act(async () => { await Promise.resolve(); await Promise.resolve(); }); }
 
-beforeEach(() => { runtime.state = createDefaultConfig(); runtime.listeners.clear(); runtime.run.mockReset(); });
+beforeEach(() => { runtime.state = createDefaultConfig(); runtime.listeners.clear(); runtime.run.mockReset(); runtime.groups = [{ provider: 'openai', models: [{ modelId: 'gpt-5.4' }] }]; });
 afterEach(() => { for (const root of roots) act(() => root.unmount()); roots = []; document.body.replaceChildren(); });
 
 describe('OpenAIModelSettings', () => {
@@ -69,6 +74,24 @@ describe('OpenAIModelSettings', () => {
     expect(button(view, 'Web tools').getAttribute('role')).toBe('switch');
     expect(view.querySelector('select[aria-label="Verbosity"]')).not.toBeNull();
     expect(view.querySelector('[role="status"][aria-live="polite"]')).not.toBeNull();
+    expect(view.textContent).toContain('Use priority processing for API-key and OAuth requests.');
+  });
+
+  it('shows API-key and OAuth routes separately and disabled in both mounts', () => {
+    runtime.groups = [{ provider: 'openai', models: [{ modelId: 'gpt-5.4' }] }, { provider: 'openai-codex', models: [{ modelId: 'gpt-5.4' }, { modelId: 'gpt-5.5' }] }];
+    const first = render(<OpenAIModelSettings />); const second = render(<OpenAIModelSettings />);
+    for (const view of [first, second]) {
+      expect(view.textContent).toContain('GPT-5.4'); expect(view.textContent).toContain('GPT-5.4 (OAuth)'); expect(view.textContent).toContain('GPT-5.5 (OAuth)');
+      expect(view.textContent?.match(/Not enabled/g)).toHaveLength(3);
+    }
+  });
+  it('enables and saves the selected OAuth route without changing the API-key route', async () => {
+    runtime.groups = [{ provider: 'openai', models: [{ modelId: 'gpt-5.4' }] }, { provider: 'openai-codex', models: [{ modelId: 'gpt-5.4' }] }];
+    runtime.run.mockResolvedValue({ text: 'saved', content: [], details: {}, isError: false });
+    const view = render(<OpenAIModelSettings />); act(() => buttonContaining(view, 'GPT-5.4 (OAuth)').click());
+    act(() => button(view, 'Use enhancements with GPT-5.4 (OAuth)').click()); act(() => button(view, 'Save').click()); await flush();
+    const saved = runtime.run.mock.calls[0][1].value as OpenAIModelEnhancementConfig;
+    expect(saved.models['openai-codex/gpt-5.4']?.enabled).toBe(true); expect(saved.models['openai/gpt-5.4']).toBeUndefined();
   });
 
   it('has no automatic accessibility violations at desktop and compact widths', async () => {

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Optional OpenAI model enhancements for Sero",
   "type": "module",
-  "packageManager": "pnpm@10.34.5",
+  "packageManager": "npm@11.11.0",
   "files": [
     "dist",
     "README.md",
@@ -16,7 +16,8 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build && npm run build:extension",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && vite build && npm run build:extension",
     "build:extension": "esbuild extension/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/extension/index.js --external:@earendil-works/pi-agent-core --external:@earendil-works/pi-ai --external:@earendil-works/pi-coding-agent",
     "test": "vitest run --root .",
     "typecheck": "tsc --noEmit -p ui/tsconfig.json && tsc --noEmit -p extension/tsconfig.json",
@@ -96,6 +97,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
     "axe-core": "^4.11.1",
+    "esbuild": "^0.25.12",
     "jsdom": "^27.0.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

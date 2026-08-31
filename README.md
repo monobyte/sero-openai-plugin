@@ -9,16 +9,17 @@ The same `OpenAIModelSettings` form is available in **Admin > Model > OpenAI** t
 | Provider | Pi API | Models |
 | --- | --- | --- |
 | `openai` | `openai-responses` | `gpt-5.4`, `gpt-5.3-codex`, `gpt-4.1` |
+| `openai-codex` | `openai-codex-responses` | `gpt-5.3-codex-spark`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra` |
 
-Only the API-key `openai` route is supported. `openai-codex` / `openai-codex-responses` OAuth requests are not rewritten. Every model requires explicit opt-in. New models are not inferred or enabled.
+Both API-key `openai` routes and authenticated `openai-codex` routes are supported. Every model requires explicit opt-in. New models are not inferred or enabled.
 
 Provider defaults control prompt adaptation, owned web tools, image generation/edit, image fallback, Fast mode, and verbosity. A model stores only values that differ from the provider default. Disabling a model keeps its overrides but applies none of them.
 
-Fast mode sets `service_tier: "priority"`. Verbosity `low`, `medium`, or `high` sets `text.verbosity`; `off` adds no plugin value. Rewrites are immutable and preserve unrelated fields. Web and image tools resolve authentication through Pi's configured OpenAI model registry. Generated images use the workspace `.sero/generated/openai-extender` path and normal image tool-result preview content.
+Fast mode sets `service_tier: "priority"` for API-key and OAuth requests. Verbosity `low`, `medium`, or `high` sets `text.verbosity`; `off` adds no plugin value. Rewrites are immutable and preserve unrelated fields. Web and image tools resolve authentication through Pi's configured OpenAI model registry. Generated images use the workspace `.sero/generated/openai-extender` path and normal image tool-result preview content.
 
 ## Limitations
 
-The POC has no background runtime. It does not include Code Mode, voice, transport replacement, compaction, usage screens, workspace settings, or ChatPanel controls. Native image input always takes priority over fallback. The current compatibility records declare native image input for all three POC models, so fallback remains dormant for them.
+The POC has no background runtime. It does not add Code Mode, voice, compaction controls, usage screens, workspace settings, or ChatPanel controls. Native image input always takes priority over fallback. Spark is marked without native image input so the configured fallback can handle images on that route.
 
 ## Development
 

@@ -39,8 +39,19 @@ describe('OpenAI enhancement configuration', () => {
   });
   it('does not infer compatibility from model substrings or other routes', () => {
     expect(findCompatibility('openai', 'openai-responses', 'prefix-gpt-5.4')).toBeUndefined();
-    expect(findCompatibility('openai-codex', 'openai-codex-responses', 'gpt-5.4')).toBeUndefined();
+    expect(findCompatibility('openai-codex', 'openai-responses', 'gpt-5.4')).toBeUndefined();
+    expect(findCompatibility('openai-codex', 'openai-codex-responses', 'gpt-5.4')?.key).toBe('openai-codex/gpt-5.4');
     expect(findCompatibility('openai', 'openai-responses', 'gpt-5.4')?.key).toBe('openai/gpt-5.4');
+    expect(findCompatibility('openai-codex', 'openai-codex-responses', 'gpt-5.3-codex-spark')?.nativeImageInput).toBe(false);
+  });
+  it('keeps API-key and OAuth state independent for the same model ID', () => {
+    let config = setModelEnabled(createDefaultConfig(), 'openai/gpt-5.4', true);
+    config = setModelEnabled(config, 'openai-codex/gpt-5.4', true);
+    config = setOverride(config, 'openai-codex/gpt-5.4', 'fastMode', true);
+    expect(effectiveSettings(config, 'openai/gpt-5.4')?.fastMode).toBe(false);
+    expect(effectiveSettings(config, 'openai-codex/gpt-5.4')?.fastMode).toBe(true);
+    config = setModelEnabled(config, 'openai-codex/gpt-5.4', false);
+    expect(effectiveSettings(config, 'openai/gpt-5.4')).toBeDefined(); expect(effectiveSettings(config, 'openai-codex/gpt-5.4')).toBeUndefined();
   });
   it('rebases independent draft changes and rejects same-setting conflicts', () => {
     const base = createDefaultConfig();

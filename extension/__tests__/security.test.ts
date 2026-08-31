@@ -11,6 +11,8 @@ describe('web and image security', () => {
     await expect(validatePublicUrl(new URL('http://127.0.0.1/'))).rejects.toThrow('Private');
     await expect(validatePublicUrl(new URL('http://169.254.169.254/latest/meta-data/'))).rejects.toThrow('Private');
     await expect(validatePublicUrl(new URL('http://metadata.google.internal/'))).rejects.toThrow('Private');
+    await expect(validatePublicUrl(new URL('file:///etc/passwd'))).rejects.toThrow('Only HTTP');
+    await expect(validatePublicUrl(new URL('https://user:secret@example.com/'))).rejects.toThrow('credentials');
   });
   it('blocks workspace symlink escape and validates image bytes instead of extensions', async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), 'oai-workspace-'));

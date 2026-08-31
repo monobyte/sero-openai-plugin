@@ -12,8 +12,9 @@ function active(fastMode: boolean, verbosity: 'off' | 'low' | 'medium' | 'high')
 }
 
 describe('extension behavior', () => {
-  it('does nothing for disabled, unsupported, and Codex OAuth routes', () => {
+  it('keeps activation exact for disabled, unsupported, and different routes', () => {
     expect(resolveActive(createDefaultConfig(), model())).toBeUndefined();
+    expect(resolveActive(createDefaultConfig(), model('openai-codex', 'gpt-5.4', 'openai-codex-responses'))).toBeUndefined();
     expect(resolveActive(setModelEnabled(createDefaultConfig(), 'openai/gpt-5.4', true), model('openai-codex', 'gpt-5.4', 'openai-codex-responses'))).toBeUndefined();
   });
   it('appends prompt guidance without replacing existing context', () => {

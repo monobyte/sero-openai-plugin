@@ -3,12 +3,27 @@ import { createImage, safeToolError, searchWeb, toToolError } from '../openai-cl
 
 afterEach(() => vi.unstubAllGlobals());
 const context = { model: { provider: 'openai', id: 'gpt-5.4', baseUrl: 'https://api.openai.com/v1' }, modelRegistry: { getApiKeyAndHeaders: vi.fn(async () => ({ ok: true, apiKey: 'secret', baseUrl: 'https://api.openai.com/v1' })) } } as never;
+const oauthContext = {
+  model: { provider: 'openai-codex', id: 'gpt-5.4', baseUrl: 'https://chatgpt.com/backend-api' },
+  modelRegistry: {
+    find: vi.fn(() => ({ provider: 'openai', id: 'gpt-4.1', baseUrl: 'https://api.openai.com/v1' })),
+    getApiKeyAndHeaders: vi.fn(async () => ({ ok: true, apiKey: 'api-secret', baseUrl: 'https://api.openai.com/v1' })),
+  },
+};
 describe('OpenAI client', () => {
   it('returns web source URLs and uses configured Pi authentication', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output_text: 'answer', output: [{ content: [{ annotations: [{ url: 'https://example.com', title: 'Example' }] }] }] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     await expect(searchWeb(context, 'query', new AbortController().signal)).resolves.toContain('https://example.com');
     expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ Authorization: 'Bearer secret' });
+  });
+  it('uses the configured API-key route for tools on an OAuth model', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output_text: 'answer', output: [{ content: [{ annotations: [{ url: 'https://example.com' }] }] }] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await searchWeb(oauthContext as never, 'query', new AbortController().signal);
+    expect(oauthContext.modelRegistry.find).toHaveBeenCalledWith('openai', 'gpt-4.1');
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ Authorization: 'Bearer api-secret' });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).model).toBe('gpt-4.1');
   });
   it('does not expose provider payloads or credentials in errors', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('raw sk-secret payload', { status: 401 })));

@@ -1,16 +1,22 @@
+import type { Api, Model } from '@earendil-works/pi-ai';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 interface OpenAIResponse { output_text?: string; output?: Array<{ content?: Array<{ text?: string; annotations?: Array<{ type?: string; url?: string; title?: string }> }> }> }
 interface ImageResponse { data?: Array<{ b64_json?: string }> }
 
-async function requestAuth(ctx: ExtensionContext): Promise<{ baseUrl: string; headers: HeadersInit }> {
-  if (!ctx.model || ctx.model.provider !== 'openai') throw new Error('OpenAI tools require an active API-key OpenAI model.');
-  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model);
-  if (!auth.ok || !auth.apiKey) throw new Error('OpenAI API-key authentication is not configured.');
-  return { baseUrl: (auth.baseUrl ?? ctx.model.baseUrl).replace(/\/$/, ''), headers: { ...auth.headers, Authorization: `Bearer ${auth.apiKey}` } };
+function requestModel(ctx: ExtensionContext): Model<Api> | undefined {
+  if (ctx.model?.provider === 'openai') return ctx.model;
+  return ctx.modelRegistry.find('openai', 'gpt-4.1');
 }
-async function openAIJson<T>(ctx: ExtensionContext, route: string, init: RequestInit): Promise<T> {
-  const { baseUrl, headers } = await requestAuth(ctx);
+async function requestAuth(ctx: ExtensionContext): Promise<{ baseUrl: string; headers: HeadersInit; modelId: string }> {
+  const model = requestModel(ctx);
+  if (!model) throw new Error('OpenAI API-key model configuration is not available.');
+  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+  if (!auth.ok || !auth.apiKey) throw new Error('OpenAI API-key authentication is not configured.');
+  return { baseUrl: (auth.baseUrl ?? model.baseUrl).replace(/\/$/, ''), headers: { ...auth.headers, Authorization: `Bearer ${auth.apiKey}` }, modelId: model.id };
+}
+async function openAIJson<T>(ctx: ExtensionContext, route: string, init: RequestInit, auth = requestAuth(ctx)): Promise<T> {
+  const { baseUrl, headers } = await auth;
   const response = await fetch(`${baseUrl}${route}`, { ...init, headers: { ...headers, ...init.headers }, signal: init.signal ?? ctx.signal });
   if (!response.ok) throw new Error(`OpenAI request failed (${response.status}).`);
   if (!response.body) throw new Error('OpenAI returned an empty response.');
@@ -28,7 +34,8 @@ async function openAIJson<T>(ctx: ExtensionContext, route: string, init: Request
   catch { throw new Error('OpenAI returned an invalid response.'); }
 }
 export async function searchWeb(ctx: ExtensionContext, query: string, signal: AbortSignal): Promise<string> {
-  const response = await openAIJson<OpenAIResponse>(ctx, '/responses', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: ctx.model?.id, input: query, tools: [{ type: 'web_search_preview' }] }) });
+  const auth = await requestAuth(ctx);
+  const response = await openAIJson<OpenAIResponse>(ctx, '/responses', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: auth.modelId, input: query, tools: [{ type: 'web_search_preview' }] }) }, Promise.resolve(auth));
   const annotations = response.output?.flatMap((item) => item.content ?? []).flatMap((content) => content.annotations ?? []).filter((item) => item.url) ?? [];
   const sources = [...new Map(annotations.map((item) => [item.url, item])).values()];
   if (sources.length === 0) throw new Error('OpenAI web search returned no source URLs.');

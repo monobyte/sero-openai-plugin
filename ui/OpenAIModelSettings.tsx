@@ -18,7 +18,7 @@ const BOOLEAN_SETTINGS: BooleanSetting[] = [
   { key: 'webTools', name: 'Web tools', description: 'Enable web search and page reading.', section: 'Tools' },
   { key: 'imageGeneration', name: 'Image generation and edit', description: 'Create files with OpenAI image APIs.', section: 'Tools' },
   { key: 'imageFallback', name: 'Image fallback', description: 'Describe images when native image input is not available.', section: 'Tools' },
-  { key: 'fastMode', name: 'Fast mode', description: 'Use priority processing for API-key requests.', section: 'Response' },
+  { key: 'fastMode', name: 'Fast mode', description: 'Use priority processing for API-key and OAuth requests.', section: 'Response' },
 ];
 
 const clone = (config: OpenAIModelEnhancementConfig): OpenAIModelEnhancementConfig => structuredClone(config);
