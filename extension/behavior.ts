@@ -23,6 +23,7 @@ export function desiredTools(active: ActiveEnhancement | undefined): string[] {
   ];
 }
 export function reconcileTools(current: readonly string[], desired: readonly string[]): string[] {
+  // Remove the retired settings tool from sessions resumed from older test builds.
   const owned = new Set<string>([...OWNED_TOOLS, 'openai_extender_settings']);
   return [...current.filter((name) => !owned.has(name)), ...new Set(desired)];
 }
