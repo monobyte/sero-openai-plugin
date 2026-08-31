@@ -1,29 +1,60 @@
 # OpenAI Model Enhancements
 
-`@sero-ai/plugin-openai-extender` is an independent external Sero plugin. It adds optional OpenAI behavior to selected models. Installing it does not change model behavior. Open **OpenAI Model Enhancements**, select a compatible model, enable it, adjust inherited settings, and save.
+`@sero-ai/plugin-openai-extender` adds optional settings and tools to compatible OpenAI models in Sero. The plugin is disabled after installation and does not change model behavior until you enable it.
 
-The same `OpenAIModelSettings` form is available in **Admin > Model > OpenAI** through `ui.admin.model-settings`. State is profile-owned at `$SERO_HOME/apps/openai-extender/state.json`. Sero and the Pi extension watch or reload this one versioned file. The plugin never stores credentials, prompts, request payloads, or tool results there.
+## Install
 
-## Supported POC routes
+In **Sero > Admin > Plugins**, install:
+
+```text
+git:https://github.com/monobyte/sero-openai-plugin.git
+```
+
+You can also install a local checkout by entering its absolute path.
+
+The plugin requires Sero `0.8.0-beta.0` or newer and Pi SDK `0.84.2` or newer.
+
+## Configure
+
+Open **Admin > Model > OpenAI** and turn on **Enable enhancements**. The switch applies the settings to every compatible model, including models used by subagents. There are no per-model switches or overrides.
+
+Changes save automatically. You can edit the settings while the plugin is disabled, then enable them when they are ready.
+
+When a compatible model is selected in chat, a wand icon appears beside the model selector. The icon shows whether the plugin is active and opens the OpenAI settings page.
+
+The settings control:
+
+- prompt adaptation
+- web search tools
+- image generation and editing
+- image fallback for models without native image input
+- Fast mode
+- response verbosity
+
+Fast mode sends `service_tier: "priority"` for API-key and OAuth requests. Verbosity `low`, `medium`, or `high` sends `text.verbosity`. Select `off` to omit the plugin value.
+
+## Compatible models
+
+The plugin uses exact provider, API, and model matches. It does not infer support for new models.
 
 | Provider | Pi API | Models |
 | --- | --- | --- |
 | `openai` | `openai-responses` | `gpt-5.4`, `gpt-5.3-codex`, `gpt-4.1` |
 | `openai-codex` | `openai-codex-responses` | `gpt-5.3-codex-spark`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra` |
 
-Both API-key `openai` routes and authenticated `openai-codex` routes are supported. Every model requires explicit opt-in. New models are not inferred or enabled.
+API-key models use the OpenAI Responses and Images APIs. OAuth models use Pi-managed Codex authentication and the Codex search and image endpoints. Image generation and editing use `gpt-image-2` on OAuth routes.
 
-Provider defaults control prompt adaptation, owned web tools, image generation/edit, image fallback, Fast mode, and verbosity. A model stores only values that differ from the provider default. Disabling a model keeps its overrides but applies none of them.
+Spark does not declare native image input. Its image fallback can describe an attached image before the model handles the request. Native image input takes priority on other compatible models.
 
-Fast mode sets `service_tier: "priority"` for API-key and OAuth requests. Verbosity `low`, `medium`, or `high` sets `text.verbosity`; `off` adds no plugin value. Rewrites are immutable and preserve unrelated fields. Web and image tools use the active model's Pi-managed authentication. API-key models use the OpenAI Responses and Images APIs. OAuth models use the Codex search and image endpoints, including `gpt-image-2` for generation and editing. Generated images use the workspace `.sero/generated/openai-extender` path and normal image tool-result preview content.
+Generated images are saved under the workspace `.sero/generated/openai-extender` directory and appear as normal image tool results.
 
-## Limitations
+## State and privacy
 
-The POC has no background runtime. It does not add Code Mode, voice, compaction controls, usage screens, workspace settings, or ChatPanel controls. Native image input always takes priority over fallback. Spark is marked without native image input so the configured fallback can handle images on that route.
+Settings are profile-owned and stored in the active profile's `apps/openai-extender/state.json` file. The plugin does not store credentials, prompts, request payloads, or tool results in this file.
+
+The plugin has no background runtime. It does not add voice controls, compaction controls, usage screens, workspace settings, or per-model settings.
 
 ## Development
-
-Requires Sero `0.8.0-beta.0` or newer and Pi SDK `0.84.2` or newer.
 
 ```sh
 npm install

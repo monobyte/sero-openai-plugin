@@ -5,10 +5,11 @@
 
 ## Validation
 
-- [ ] `pnpm typecheck`
-- [ ] `pnpm build` (if relevant)
-- [ ] `pnpm --filter @sero/desktop test -- --run` (if relevant)
-- [ ] `pnpm --filter @sero/desktop test:e2e` (if relevant)
+- [ ] `npm test`
+- [ ] `npm run typecheck`
+- [ ] `npm run build`
+- [ ] `npm run pack:test`
+- [ ] `git diff --check`
 - [ ] docs updated (if relevant)
 
 ## Safety checklist
